@@ -1,0 +1,230 @@
+3.Implement Min, Max, Sum and Average operations using ParallelReduction
+
+#include <iostream>
+#include <omp.h>
+#include <climits>
+
+using namespace std;
+
+// Function to find the minimum value in an array using OpenMP reduction
+void min_reduction(int arr[], int n) {
+    int min_value = INT_MAX; // Initialize min_value to the maximum possible integer value
+
+    // OpenMP parallel for loop with reduction clause (min)
+    #pragma omp parallel for reduction(min: min_value)
+    for (int i = 0; i < n; i++) {
+        if (arr[i] < min_value) {
+            min_value = arr[i]; // Update min_value if the current element is smaller
+        }
+    }
+
+    cout << "Minimum value: " << min_value << endl; // Output the minimum value
+}
+
+// Function to find the maximum value in an array using OpenMP reduction
+void max_reduction(int arr[], int n) {
+    int max_value = INT_MIN; // Initialize max_value to the minimum possible integer value
+
+    // OpenMP parallel for loop with reduction clause (max)
+    #pragma omp parallel for reduction(max: max_value)
+    for (int i = 0; i < n; i++) {
+        if (arr[i] > max_value) {
+          max_value = arr[i]; // Update max_value if the current element is larger
+        }
+    }
+
+    cout << "Maximum value: " << max_value << endl; // Output the maximum value
+}
+
+// Function to find the sum of all elements in an array using OpenMP reduction
+void sum_reduction(int arr[], int n) {
+    int sum = 0; // Initialize sum to zero
+
+    // OpenMP parallel for loop with reduction clause (sum)
+    #pragma omp parallel for reduction(+: sum)
+    for (int i = 0; i < n; i++) {
+        sum += arr[i]; // Add each element to sum
+    }
+
+    cout << "Sum: " << sum << endl; // Output the sum
+}
+
+// Function to find the average of all elements in an array using OpenMP reduction
+void average_reduction(int arr[], int n) {
+    int sum = 0; // Initialize sum to zero
+
+    // OpenMP parallel for loop with reduction clause (sum)
+    #pragma omp parallel for reduction(+: sum)
+    for (int i = 0; i < n; i++) {
+      sum += arr[i]; // Add each element to sum
+    }
+
+    cout << "Average: " << (double)sum / n << endl; // Output the average (casting sum to double for accurate division)
+}
+
+int main() {
+    int *arr, n;
+    cout << "\nEnter the total number of elements: ";
+    cin >> n;
+
+    arr = new int[n]; // Dynamically allocate memory for the array
+    cout << "\nEnter the elements: ";
+    for (int i = 0; i < n; i++) {
+        cin >> arr[i]; // Input the elements of the array
+    }
+
+    min_reduction(arr, n); // Find the minimum value in the array
+    max_reduction(arr, n); // Find the maximum value in the array
+    sum_reduction(arr, n); // Find the sum of all elements in the array
+    average_reduction(arr, n); // Find the average of all elements in the array
+
+    delete[] arr; // Deallocate memory for the array
+    return 0;
+}
+
+
+output:
+
+
+Enter the total number of elements: 5
+
+Enter the elements: 23 42 5 299 71
+Minimum value: 5
+Maximum value: 299
+Sum: 440
+Average: 88
+
+_______________________________________________________________________________________________________________________________________________________
+
+
+Finds the minimum value in the array.
+
+Formula:
+min=min(min,arr[i])
+
+Finds the maximum value in the array.
+
+Formula:
+max=max(max,arr[i])
+
+sum= 
+i=0
+∑
+n−1
+arr[i]
+
+❓Q1: What is the main objective of this program?
+✅ A1:
+To calculate the minimum, maximum, sum, and average of an array using parallel reduction operations with OpenMP.
+
+❓Q2: What header is used to support OpenMP?
+✅ A2:
+#include <omp.h> — it provides the functions and directives required for OpenMP.
+
+❓Q3: What is a reduction operation in OpenMP?
+✅ A3:
+A reduction operation combines the results from multiple threads into a single value using a specific operator (e.g., +, min, max).
+
+❓Q4: Which reduction operators are used in this program?
+✅ A4:
+
+min for finding the minimum value
+
+max for finding the maximum value
+
++ for calculating the sum (used in both sum and average)
+
+🔹 Technical Questions on Code
+❓Q5: Why is INT_MAX used in the min_reduction() function?
+✅ A5:
+It initializes the min_value with the largest possible integer to ensure any array element will be smaller and thus replace it.
+
+❓Q6: Why is casting to double done in the average_reduction() function?
+✅ A6:
+To ensure floating-point division is performed, not integer division, so the average is accurate with decimals.
+
+❓Q7: What happens if reduction(min: min_value) is not used?
+✅ A7:
+Without reduction, threads may overwrite each other’s results, leading to race conditions and incorrect output.
+
+❓Q8: How does OpenMP distribute work in #pragma omp parallel for?
+✅ A8:
+OpenMP divides the loop iterations among available threads, and each thread processes a chunk of the array concurrently.
+
+❓Q9: What would happen if the array is empty (n = 0)?
+✅ A9:
+The program may crash or produce undefined results since no loop iteration occurs and division by zero in the average calculation is possible.
+
+🔹 Conceptual & Extension
+❓Q10: Can this program run correctly without OpenMP enabled?
+✅ A10:
+Yes, it can run sequentially, but it won't benefit from parallelism. You must compile with -fopenmp (e.g., g++ file.cpp -fopenmp) to enable OpenMP.
+
+❓Q11: How can you measure the performance gain from using OpenMP in this program?
+✅ A11:
+By recording execution time using omp_get_wtime() before and after each operation and comparing it to the sequential version.
+
+❓Q12: What is a race condition, and how is it prevented here?
+✅ A12:
+A race condition occurs when multiple threads access and modify shared data without synchronization. It’s prevented here using the reduction clause
+
+❓Q16: Is it necessary to check whether n is greater than 0 before performing reductions?
+✅ A16:
+Yes, especially in average_reduction() to avoid division by zero and in all reductions to prevent undefined behavior.
+
+❓Q17: Why is new used instead of a static or stack-allocated array?
+✅ A17:
+To allow dynamic allocation at runtime based on user input. Stack allocation has size limits, while new allows larger, user-defined arrays.
+
+❓Q18: Is it efficient to perform all four operations (min, max, sum, average) in separate loops?
+✅ A18:
+Not optimally — they could be combined into a single loop to reduce traversal overhead, but separating them simplifies the use of OpenMP reduction clauses and makes the code more modular.
+
+🔹 Extensions & Improvements
+❓Q19: How can this program be extended to work with floating-point numbers?
+✅ A19:
+Change the data type of the array and related variables to float or double, and update reduction clauses accordingly (e.g., reduction(min: min_value) still works).
+
+❓Q20: How would you modify the code to also find the index of the min or max value?
+✅ A20:
+OpenMP's reduction doesn't support reducing both value and index directly. You would need to use a critical section or custom reduction with a structure holding both value and index.
+
+❓Q21: What OpenMP feature could you use if reduction isn't available or sufficient for a custom operation?
+✅ A21:
+You can use #pragma omp critical to protect updates to shared variables manually, although it's slower than reduction.
+
+❓Q22: How would performance be impacted if the array is very small?
+✅ A22:
+Parallelism introduces overhead, so for small arrays, the performance might be worse than sequential execution.
+
+❓Q23: Can OpenMP reductions be nested?
+✅ A23:
+Not directly. Nested reductions require careful scoping and management of each parallel region. It’s generally advised to flatten computations or restructure logic.
+
+❓Q24: What happens if two threads find the same minimum value simultaneously?
+✅ A24:
+OpenMP handles this correctly via the reduction operator — the final result will still be correct because it reduces partial results from threads at the end
+
+❓Q13: What is the effect of changing the number of threads in this program?
+✅ A13:
+Changing the number of threads (via omp_set_num_threads() or OMP_NUM_THREADS) can affect performance — more threads may speed up execution but could also cause overhead if there are too many.
+
+❓Q14: How can you control the number of threads used in OpenMP?
+✅ A14:
+By calling omp_set_num_threads(n) before the parallel region or setting the environment variable OMP_NUM_THREADS.
+
+❓Q15: What is the default number of threads if none is specified?
+✅ A15:
+It’s usually equal to the number of cores on the machine but can vary depending on the OpenMP implementation and system settings
+
+
+
+
+
+
+
+
+
+
+
+

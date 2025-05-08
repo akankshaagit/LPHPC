@@ -1,0 +1,503 @@
+4. CUDA:
+Addition of two large vectors
+2. Matrix Multiplication using CUDA
+
+COMBINED :
+
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <cuda_runtime.h>
+
+#define VECTOR_SIZE 1000
+#define MATRIX_SIZE 64
+
+// ================= Vector Addition Kernel =================
+__global__ void vectorAdd(int *a, int *b, int *c, int n) {
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (index < n) {
+        c[index] = a[index] + b[index];
+    }
+}
+
+// ================= Matrix Multiplication Kernel =================
+__global__ void matrixMul(int *a, int *b, int *c, int n) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row < n && col < n) {
+        int sum = 0;
+        for (int i = 0; i < n; ++i) {
+            sum += a[row * n + i] * b[i * n + col];
+        }
+        c[row * n + col] = sum;
+    }
+}
+
+// ================= Error Check Macro =================
+#define CUDA_CHECK(err) \
+    if (err != cudaSuccess) { \
+        std::cerr << "CUDA Error: " << cudaGetErrorString(err) << std::endl; \
+        exit(EXIT_FAILURE); \
+    }
+
+int main() {
+    srand((unsigned)time(NULL));
+
+    // ================= Vector Addition =================
+    std::cout << "=== Vector Addition ===" << std::endl;
+
+    int *h_a, *h_b, *h_c;
+    int *d_a, *d_b, *d_c;
+    int vecSize = VECTOR_SIZE * sizeof(int);
+
+    h_a = (int*)malloc(vecSize);
+    h_b = (int*)malloc(vecSize);
+    h_c = (int*)malloc(vecSize);
+
+    for (int i = 0; i < VECTOR_SIZE; ++i) {
+        h_a[i] = rand() % 100;
+        h_b[i] = rand() % 100;
+    }
+
+    CUDA_CHECK(cudaMalloc(&d_a, vecSize));
+    CUDA_CHECK(cudaMalloc(&d_b, vecSize));
+    CUDA_CHECK(cudaMalloc(&d_c, vecSize));
+
+    CUDA_CHECK(cudaMemcpy(d_a, h_a, vecSize, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_b, h_b, vecSize, cudaMemcpyHostToDevice));
+
+    int blockSize = 256;
+    int gridSize = (VECTOR_SIZE + blockSize - 1) / blockSize;
+    vectorAdd<<<gridSize, blockSize>>>(d_a, d_b, d_c, VECTOR_SIZE);
+    CUDA_CHECK(cudaGetLastError());
+
+    CUDA_CHECK(cudaMemcpy(h_c, d_c, vecSize, cudaMemcpyDeviceToHost));
+
+    std::cout << "First 10 elements of result vector C: ";
+    for (int i = 0; i < 10; ++i) {
+        std::cout << h_c[i] << " ";
+    }
+    std::cout << std::endl;
+
+    cudaFree(d_a); cudaFree(d_b); cudaFree(d_c);
+    free(h_a); free(h_b); free(h_c);
+
+    // ================= Matrix Multiplication =================
+    std::cout << "\n=== Matrix Multiplication ===" << std::endl;
+
+    int *matA, *matB, *matC;
+    int *d_matA, *d_matB, *d_matC;
+    int matSize = MATRIX_SIZE * MATRIX_SIZE * sizeof(int);
+
+    matA = (int*)malloc(matSize);
+    matB = (int*)malloc(matSize);
+    matC = (int*)malloc(matSize);
+
+    for (int i = 0; i < MATRIX_SIZE * MATRIX_SIZE; ++i) {
+        matA[i] = rand() % 100;
+        matB[i] = rand() % 100;
+    }
+
+    CUDA_CHECK(cudaMalloc(&d_matA, matSize));
+    CUDA_CHECK(cudaMalloc(&d_matB, matSize));
+    CUDA_CHECK(cudaMalloc(&d_matC, matSize));
+
+    CUDA_CHECK(cudaMemcpy(d_matA, matA, matSize, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_matB, matB, matSize, cudaMemcpyHostToDevice));
+
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((MATRIX_SIZE + 15) / 16, (MATRIX_SIZE + 15) / 16);
+    matrixMul<<<numBlocks, threadsPerBlock>>>(d_matA, d_matB, d_matC, MATRIX_SIZE);
+    CUDA_CHECK(cudaGetLastError());
+
+    CUDA_CHECK(cudaMemcpy(matC, d_matC, matSize, cudaMemcpyDeviceToHost));
+
+    std::cout << "Top-left 5x5 block of result matrix C:" << std::endl;
+    for (int i = 0; i < 5; ++i) {
+        for (int j = 0; j < 5; ++j) {
+            std::cout << matC[i * MATRIX_SIZE + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    cudaFree(d_matA); cudaFree(d_matB); cudaFree(d_matC);
+    free(matA); free(matB); free(matC);
+
+    return 0;
+}
+
+
+OP:
+
+=== Vector Addition ===
+First 10 elements of result vector C: 131 99 122 68 168 145 119 95 114 83 
+
+=== Matrix Multiplication ===
+Top-left 5x5 block of result matrix C:
+155992 138200 153111 153542 150135 
+162359 155029 162882 159228 163580 
+160171 153026 153211 162612 160957 
+164744 149690 145295 155224 154562 
+168158 153746 168398 179604 179005 
+
+___________________________________________________________________
+
+SEPARATE:
+
+ADDITION :
+
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <cuda_runtime.h>
+
+// CUDA kernel for vector addition
+__global__ void vectorAdd(int *a, int *b, int *c, int n) {
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (index < n) {
+        c[index] = a[index] + b[index];
+    }
+}
+
+// CUDA error checking macro
+#define CUDA_CHECK(err) \
+    if (err != cudaSuccess) { \
+        std::cerr << "CUDA Error: " << cudaGetErrorString(err) << std::endl; \
+        exit(EXIT_FAILURE); \
+    }
+
+int main() {
+    int n = 1000;
+    int *a, *b, *c;           // Host
+    int *d_a, *d_b, *d_c;     // Device
+    int size = n * sizeof(int);
+
+    // Allocate host memory
+    a = (int*)malloc(size);
+    b = (int*)malloc(size);
+    c = (int*)malloc(size);
+
+    // Initialize host vectors
+    srand((unsigned)time(NULL));
+    for (int i = 0; i < n; ++i) {
+        a[i] = rand() % 100;
+        b[i] = rand() % 100;
+    }
+
+    // Allocate device memory
+    CUDA_CHECK(cudaMalloc(&d_a, size));
+    CUDA_CHECK(cudaMalloc(&d_b, size));
+    CUDA_CHECK(cudaMalloc(&d_c, size));
+
+    // Copy to device
+    CUDA_CHECK(cudaMemcpy(d_a, a, size, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice));
+
+    // Launch kernel
+    int blockSize = 256;
+    int gridSize = (n + blockSize - 1) / blockSize;
+    vectorAdd<<<gridSize, blockSize>>>(d_a, d_b, d_c, n);
+    CUDA_CHECK(cudaGetLastError());  // Check for launch errors
+
+    // Copy result back
+    CUDA_CHECK(cudaMemcpy(c, d_c, size, cudaMemcpyDeviceToHost));
+
+    // Print part of result
+    std::cout << "First 10 elements of result vector c:\n";
+    for (int i = 0; i < 10; ++i) {
+        std::cout << c[i] << " ";
+    }
+    std::cout << std::endl;
+
+    // Cleanup
+    cudaFree(d_a); cudaFree(d_b); cudaFree(d_c);
+    free(a); free(b); free(c);
+
+    return 0;
+}
+
+
+_________________________________________________________
+
+Matrix Multiplication:
+
+
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <cuda_runtime.h>
+
+#define N 64
+
+// CUDA kernel for matrix multiplication
+__global__ void matrixMul(int *a, int *b, int *c, int n) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row < n && col < n) {
+        int sum = 0;
+        for (int i = 0; i < n; ++i) {
+            sum += a[row * n + i] * b[i * n + col];
+        }
+        c[row * n + col] = sum;
+    }
+}
+
+// CUDA error checking macro
+#define CUDA_CHECK(err) \
+    if (err != cudaSuccess) { \
+        std::cerr << "CUDA Error: " << cudaGetErrorString(err) << std::endl; \
+        exit(EXIT_FAILURE); \
+    }
+
+int main() {
+    int *a, *b, *c;
+    int *d_a, *d_b, *d_c;
+    int size = N * N * sizeof(int);
+
+    // Allocate host memory
+    a = (int*)malloc(size);
+    b = (int*)malloc(size);
+    c = (int*)malloc(size);
+
+    // Initialize matrices
+    srand((unsigned)time(NULL));
+    for (int i = 0; i < N * N; ++i) {
+        a[i] = rand() % 100;
+        b[i] = rand() % 100;
+    }
+
+    // Allocate device memory
+    CUDA_CHECK(cudaMalloc(&d_a, size));
+    CUDA_CHECK(cudaMalloc(&d_b, size));
+    CUDA_CHECK(cudaMalloc(&d_c, size));
+
+    // Copy to device
+    CUDA_CHECK(cudaMemcpy(d_a, a, size, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice));
+
+    // Launch kernel
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((N + 15) / 16, (N + 15) / 16);
+    matrixMul<<<numBlocks, threadsPerBlock>>>(d_a, d_b, d_c, N);
+    CUDA_CHECK(cudaGetLastError());
+
+    // Copy result back
+    CUDA_CHECK(cudaMemcpy(c, d_c, size, cudaMemcpyDeviceToHost));
+
+    // Print part of result
+    std::cout << "Result matrix C (first 5x5 block):" << std::endl;
+    for (int i = 0; i < 5; ++i) {
+        for (int j = 0; j < 5; ++j) {
+            std::cout << c[i * N + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    // Cleanup
+    cudaFree(d_a); cudaFree(d_b); cudaFree(d_c);
+    free(a); free(b); free(c);
+
+    return 0;
+}
+
+
+___________________________________________________________________________________________________________________________
+
+
+CUDA (Compute Unified Device Architecture) is:
+A parallel computing platform and API developed by NVIDIA.
+
+It allows you to run programs on the GPU for general-purpose computing (not just graphics).
+
+CUDA enables massively parallel computation, especially useful for scientific computing, image processing, deep learning, and simulations.
+
+
+| Feature              | Benefit                                                |
+| -------------------- | ------------------------------------------------------ |
+| GPU Acceleration     | Much faster than CPUs for data-parallel tasks          |
+| Thousands of Threads | Each GPU kernel can launch 1000s of threads            |
+| Developer Control    | Direct control over memory, threads, and performance   |
+| Interoperability     | Works with C, C++, Python, and deep learning libraries |
+
+
+Term	Meaning
+Kernel	A function that runs on the GPU (e.g., __global__ void vectorAdd(...))
+Thread	One execution instance of the kernel
+Block	Group of threads (1D, 2D, or 3D)
+Grid	Group of blocks
+Host	The CPU and its memory
+Device	The GPU and its memory
+
+
+Q1: What is CUDA?
+A: CUDA is a parallel computing platform and API created by NVIDIA that enables general-purpose computing on GPUs using C/C++ extensions.
+
+Q2: What is a kernel function in CUDA?
+A: A kernel is a function written in C/C++ with __global__ that runs on the GPU and is launched with multiple threads to perform parallel computation.
+
+Q3: What are blocks and grids in CUDA?
+A:
+
+A block is a group of threads.
+
+A grid is a group of blocks.
+This structure allows CUDA to scale across different GPU architectures.
+
+Q4: Why is parallelism useful in vector addition?
+A: Each element addition (e.g., c[i] = a[i] + b[i]) is independent and can be computed simultaneously, reducing time from O(n) to O(1) in an ideal case.
+
+Q5: How is matrix multiplication parallelized in CUDA?
+A: Each thread is assigned to compute one element C[i][j] by performing the dot product of row i of A and column j of B.
+
+Q6: How does memory transfer work in CUDA?
+A:
+
+cudaMemcpyHostToDevice — transfers data from CPU to GPU.
+
+cudaMemcpyDeviceToHost — transfers results back from GPU to CPU.
+
+This is necessary because CPU and GPU have separate memory spaces.
+
+Q7: What does __global__ mean?
+A: It declares a function (kernel) that will run on the device (GPU) and can be called from the host (CPU).
+
+Q8: What is cudaMalloc and cudaFree?
+A:
+
+cudaMalloc allocates memory on the GPU.
+
+cudaFree deallocates it.
+
+Q9: What is cudaMemcpy?
+A: It copies data between host and device memory.
+
+Q10: What is dim3 used for?
+A: dim3 is a CUDA type that lets you define 1D, 2D, or 3D thread/block sizes, especially for working with 2D data like matrices
+
+Q11: What is the difference between CPU and GPU execution models?
+A:
+
+CPU: Few cores optimized for sequential tasks; better for control-intensive tasks.
+
+GPU: Thousands of lightweight cores optimized for data-parallel tasks; better for large-scale numerical computing like image processing, machine learning, etc.
+
+🔸Q12: Why is cudaDeviceSynchronize() used in CUDA programs?
+A:
+It ensures that the kernel execution is completed before continuing with the host-side code. It's used mainly for timing and debugging, but not always necessary if a cudaMemcpy (blocking call) follows the kernel.
+
+🔸Q13: What is a warp in CUDA?
+A:
+A warp is a group of 32 threads that execute the same instruction at the same time on the GPU (SIMD model). Efficient CUDA code minimizes divergence within a warp.
+
+🔸Q14: What is thread divergence?
+A:
+Thread divergence occurs when threads in the same warp follow different execution paths (e.g., due to if conditions). It leads to serialized execution, reducing parallel performance.
+
+🔸Q15: Why do we check for errors after CUDA calls?
+A:
+To catch and debug memory allocation errors, kernel launch failures, illegal memory access, etc. Example:
+
+cpp
+Copy
+Edit
+cudaError_t err = cudaGetLastError();
+if (err != cudaSuccess) std::cout << cudaGetErrorString(err);
+🔸Q16: Can CUDA handle floating point numbers?
+A:
+Yes. CUDA supports all standard data types including float, double, int, etc. You can easily modify the kernel and memory allocations to use floating point arithmetic.
+
+🔸Q17: What is coalesced memory access in CUDA?
+A:
+It's an efficient way of accessing global memory where threads access contiguous memory locations. Coalesced access reduces latency and improves performance.
+
+🔸Q18: What are the different types of CUDA memory?
+Memory Type	Description
+Global	Accessible by all threads; high latency
+Shared	Fast memory shared among threads in a block
+Local	Private to a thread; stored in global memory
+Constant	Read-only memory for all threads; cached
+Texture/Surface	Specialized memory for 2D/3D data access
+
+🔸Q19: Why are dim3 blocks and grids used in matrix multiplication?
+A:
+Because matrices are 2D, it's logical and efficient to assign threads in 2D (dim3). Each thread computes one matrix element using its row and col indices.
+
+🔸Q20: What happens if the number of threads exceeds the limit of a CUDA block?
+A:
+Each block can only have a limited number of threads (typically 1024). If you exceed this, the kernel will fail to launch, or the behavior will be undefined.
+
+🔸Q21: What are occupancy and how does it affect performance?
+A:
+Occupancy is the ratio of active warps to maximum warps on a multiprocessor. Higher occupancy generally means better utilization of the GPU.
+
+🔸Q22: What is the role of the __global__ and __device__ keywords in CUDA?
+Keyword	Meaning
+__global__	Defines a kernel (runs on GPU, called from CPU)
+__device__	Function that runs and is called only on GPU
+
+🔸Q23: Can multiple kernels run in parallel in CUDA?
+A:
+Yes, with CUDA streams, multiple kernels can run concurrently if they don’t use shared resources. But by default, kernel launches are serialized.
+
+🔸Q24: What is the purpose of cudaMemcpyHostToDevice vs. cudaMemcpyDeviceToHost?
+A:
+
+HostToDevice: Copy input data from CPU → GPU.
+
+DeviceToHost: Copy result from GPU → CPU after computation.
+
+🔸Q25: How to improve performance in CUDA programs?
+A:
+
+Use shared memory efficiently.
+
+Avoid warp divergence.
+
+Ensure coalesced memory access.
+
+Use appropriate grid and block sizes.
+
+Minimize data transfer between host and device.
+
+🔸Q26: What is the output of vector addition or matrix multiplication based on?
+A:
+It depends on the random input values, the kernel logic, and correct memory handling. CUDA simply parallelizes what would normally be a nested loop on the CPU.
+
+🔸Q27: How can we test CUDA programs on machines without an NVIDIA GPU?
+A:
+You can use:
+
+CUDA emulation mode (older CUDA versions).
+
+NVIDIA Nsight Compute (via Visual Studio).
+
+Cloud platforms like Google Colab, AWS, or Azure with GPU instances.
+
+NVIDIA Docker containers with CUDA runtime.
+
+🔸Q28: What is cudaThreadSynchronize()?
+A:
+It was an older version of cudaDeviceSynchronize() used to synchronize host and device. It is now deprecated.
+
+🔸Q29: Can a kernel call another kernel in CUDA?
+A:
+Yes, using Dynamic Parallelism (CUDA 5.0+). A kernel can launch another kernel from within the device, though it adds complexity.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,303 @@
+2.Write a program to implement Parallel Bubble Sort. Use existing algorithms and measure the
+performance of sequential and parallel algorithms.
+
+\#include <iostream>
+\#include <vector>
+\#include <chrono>
+\#include \<omp.h>
+using namespace std;
+using namespace std::chrono;
+
+void bubbleSortSeq(vector<int>& arr){
+int n = arr.size();
+for(int i = 0; i < n - 1; i++){
+for(int j = 0; j < n - i - 1; j++){
+if(arr\[j] > arr\[j + 1]){
+swap(arr\[j], arr\[j + 1]);
+}
+}
+}
+}
+
+void bubbleSortPar(vector<int>& arr){
+int n = arr.size();
+for(int i = 0; i < n; i++){
+\#pragma omp parallel for
+for(int j = i % 2; j < n - 1; j += 2){
+if(arr\[j] > arr\[j + 1]){
+swap(arr\[j], arr\[j + 1]);
+}
+}
+}
+}
+
+void merge(vector<int>& arr, int l, int m, int r){
+vector<int> temp;
+int i = l, j = m + 1;
+while(i <= m && j <= r){
+if(arr\[i] < arr\[j]){
+temp.push\_back(arr\[i++]);
+}else{
+temp.push\_back(arr\[j++]);
+}
+}
+while(i <= m) temp.push\_back(arr\[i++]);
+while(j <= r) temp.push\_back(arr\[j++]);
+
+```
+for(int k = 0; k < temp.size(); k++){
+    arr[l + k] = temp[k];
+}
+```
+
+}
+
+void mergeSortSeq(vector<int>& arr, int l, int r){
+if(l >= r) return;
+int m = (l + r) / 2;
+mergeSortSeq(arr, l, m);
+mergeSortSeq(arr, m + 1, r);
+merge(arr, l, m, r);
+}
+
+void mergeSortPar(vector<int>& arr, int l, int r, int depth = 0){
+if(l >= r) return;
+int m = (l + r) / 2;
+if(depth <= 3){
+\#pragma omp parallel
+{
+\#pragma omp single
+{
+\#pragma omp task
+mergeSortPar(arr, l, m, depth + 1);
+\#pragma omp task
+mergeSortPar(arr, m + 1, r, depth + 1);
+\#pragma omp taskwait
+}
+}
+}else{
+mergeSortSeq(arr, l, m);
+mergeSortSeq(arr, m + 1, r);
+}
+merge(arr, l, m, r);
+}
+
+void display(const vector<int>& arr){
+for(auto x : arr){
+cout << x << " ";
+}
+cout << endl;
+}
+
+int main(){
+int n;
+cout << "Enter the number of elements: ";
+cin >> n;
+
+```
+vector<int> arr(n);
+cout << "Enter elements: " << endl;
+for(int i = 0; i < n; i++){
+    cin >> arr[i];
+}
+
+vector<int> bseq = arr, bpar = arr, mseq = arr, mpar = arr;
+high_resolution_clock::time_point start, end;
+
+start = high_resolution_clock::now();
+bubbleSortSeq(bseq);
+end = high_resolution_clock::now();
+cout << "\nSequential Bubble Sort Time: " << duration_cast<milliseconds>(end - start).count() << "ms";
+cout << "\nSorted Array (Sequential Bubble Sort): ";
+display(bseq);
+
+start = high_resolution_clock::now();
+bubbleSortPar(bpar);
+end = high_resolution_clock::now();
+cout << "\nParallel Bubble Sort Time: " << duration_cast<milliseconds>(end - start).count() << "ms";
+cout << "\nSorted Array (Parallel Bubble Sort): ";
+display(bpar);
+
+start = high_resolution_clock::now();
+mergeSortSeq(mseq, 0, n - 1);
+end = high_resolution_clock::now();
+cout << "\nSequential Merge Sort Time: " << duration_cast<milliseconds>(end - start).count() << "ms";
+cout << "\nSorted Array (Sequential Merge Sort): ";
+display(mseq);
+
+start = high_resolution_clock::now();
+mergeSortPar(mpar, 0, n - 1); 
+end = high_resolution_clock::now();
+cout << "\nParallel Merge Sort Time: " << duration_cast<milliseconds>(end - start).count() << "ms";
+cout << "\nSorted Array (Parallel Merge Sort): ";
+display(mpar);
+```
+}  
+
+
+output:
+
+Enter the number of elements: 5
+Enter elements: 
+20 40 10 21 6
+
+Sequential Bubble Sort Time: 0ms
+Sorted Array (Sequential Bubble Sort): 6 10 20 21 40 
+
+Parallel Bubble Sort Time: 0ms
+Sorted Array (Parallel Bubble Sort): 6 10 20 21 40 
+
+Sequential Merge Sort Time: 0ms
+Sorted Array (Sequential Merge Sort): 6 10 20 21 40 
+
+Parallel Merge Sort Time: 0ms
+Sorted Array (Parallel Merge Sort): 6 10 20 21 40 
+____________________________________________________________________________________________________________________________________________
+
+
+question and answers
+
+This C++ program:
+
+Implements Bubble Sort and Merge Sort in both sequential and parallel forms.
+
+Uses OpenMP to parallelize parts of the sorting algorithms.
+
+Uses chrono library to measure the execution time of each variant.
+
+
+ Chrono Library
+high_resolution_clock: Measures wall-clock time.
+
+Purpose: Benchmarking algorithm performance.
+
+Real-time use: Performance tuning and profiling
+
+6: What is the main challenge of parallelizing Bubble Sort?
+A:
+The main challenge is that each element depends on the result of the previous comparison. Traditional Bubble Sort compares adjacent pairs, which creates data dependencies. These dependencies make naive parallelism incorrect. Odd-even transposition is used to circumvent this limitation by allowing non-overlapping comparisons.
+
+Q7: Is the parallel version of Bubble Sort always faster than the sequential version? Why or why not?
+A:
+No. For small arrays, parallel overhead (thread creation, synchronization) may make it slower. Only with large arrays do you see performance gains. Also, because Bubble Sort is O(n²), the gain is limited compared to more efficient algorithms.
+
+Q8: Why use #pragma omp parallel for in Bubble Sort but #pragma omp task in Merge Sort?
+A:
+
+omp parallel for is used when a loop’s iterations can run independently — ideal for comparing/swapping disjoint pairs.
+
+omp task is better for divide-and-conquer algorithms like Merge Sort, where recursive calls can be performed independently and joined later.
+
+Q9: What does #pragma omp single do in the Merge Sort implementation?
+A:
+It ensures that only one thread (in the parallel region) executes the block of code where tasks are created. Without it, multiple threads could redundantly create the same tasks, leading to incorrect execution or inefficiency.
+
+Q10: What is the purpose of #pragma omp taskwait?
+A:
+It ensures that both recursive sorting tasks (mergeSortPar) are completed before merging. Without it, the merge might run before the recursive tasks complete, causing incorrect results.
+
+Q11: Why is it necessary to set a recursion depth limit for parallel merge sort?
+A:
+Creating too many tasks for small subarrays introduces excessive overhead and thread contention. The depth limit ensures that only a reasonable number of threads are created, balancing speed and resource usage.
+
+Q12: Can Bubble Sort be made truly parallel?
+A:
+Only partially. The maximum theoretical speedup is limited because of inherent dependencies. Odd-even transposition allows some parallelism, but performance remains bound by O(n²).
+
+Q13: Why do we clone the input array before each sort?
+A:
+To ensure a fair comparison. Sorting modifies the array in-place, so each version (sequential and parallel) should start with the same unsorted data.
+
+Q14: What is false sharing in parallelism? Could it affect your program?
+A:
+False sharing occurs when multiple threads update variables on the same cache line, causing unnecessary memory traffic. In your parallel bubble sort, simultaneous access to adjacent elements (arr[j], arr[j+1]) could lead to this, especially on shared-memory systems, slightly affecting performance.
+
+Q15: Could race conditions occur in your parallel bubble sort?
+A:
+No, because each thread only compares and swaps disjoint pairs (odd or even indices in a pass). However, caution is still needed with shared memory access.
+
+Q16: Why is Merge Sort preferred in real-time systems over Bubble Sort?
+A:
+Merge Sort offers guaranteed O(n log n) performance, which is predictable and scalable. Bubble Sort's O(n²) worst-case makes it unsuitable for time-sensitive or large-scale systems.
+
+Q17: Why use high-resolution clock instead of clock()?
+A:
+high_resolution_clock provides nanosecond or microsecond precision and measures real-world elapsed time. clock() measures CPU time, which is less accurate in multithreaded programs.
+
+Q18: How can you improve the performance of your parallel Bubble Sort?
+A:
+
+Avoid unnecessary parallel overhead on small arrays.
+
+Use SIMD (vectorization) where applicable.
+
+Use dynamic scheduling with #pragma omp parallel for schedule(dynamic) to balance load.
+
+Q19: How do OpenMP threads share memory?
+A:
+All threads in an OpenMP parallel region share the same address space (shared memory model). Variables can be marked as shared or private explicitly to control scope.
+
+Q20: What if omp_set_num_threads() is not used?
+A:
+OpenMP chooses the number of threads based on available cores or environment variables. You can use omp_set_num_threads(n) or set OMP_NUM_THREADS=n in the shell to control it manually.
+
+
+: Why use OpenMP for parallelization?
+A: OpenMP makes it easy to parallelize CPU-intensive loops. It allows us to exploit multiple CPU cores without managing threads manually.
+
+Q2: Why is Bubble Sort parallelized using odd-even transposition?
+A: Traditional Bubble Sort can't be parallelized easily due to data dependencies. Odd-even transposition breaks the dependency chain, allowing disjoint comparisons in parallel.
+
+Q3: Why does Merge Sort benefit more from parallelization than Bubble Sort?
+A: Merge Sort has a divide-and-conquer structure, making it naturally parallelizable. Bubble Sort has O(n²) comparisons, with limited scope for parallelism.
+
+Q4: What’s the impact of depth in Merge Sort parallel version?
+A: Controls task creation. Deeper recursion creates too many small tasks, increasing overhead. Limiting depth balances performance and parallel efficiency.
+
+Q5: Why is time measured in milliseconds?
+A: Milliseconds offer fine-grained timing appropriate for short-running algorithms on small datasets. Nanoseconds may be too sensitive to noise.
+
+🧠 Real-Time Applications
+Merge Sort (Parallel): Large-scale sorting in databases, file systems, big data pipelines.
+
+Bubble Sort (Parallel): Educational purposes, small-scale systems with real-time feedback loops.
+
+Real-Time Measurement Tips
+Repeat multiple runs and take an average to reduce noise.
+
+Use large input sizes to see real benefit of parallelization.
+
+Set threads manually (e.g. omp_set_num_threads(4);) to test scaling.
+
+Use omp_get_wtime() as an alternative to chrono if you want pure OpenMP-based timing:
+
+
+| Metric           | Value                                          |
+| ---------------- | ---------------------------------------------- |
+| Time             | `O(n²)`                                        |
+| Space            | `O(1)`                                         |
+| Parallel Speedup | Limited — due to inherent number of passes (n) |
+| Stability        | Yes                                            |
+| In-place         | Yes                                            |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                                                                     
